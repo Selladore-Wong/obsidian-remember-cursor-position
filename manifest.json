@@ -1,10 +1,10 @@
 {
-	"id": "remember-cursor-position",
-	"name": "Remember cursor position",
+	"id": "save-cursor-position",
+	"name": "Save cursor position",
 	"version": "1.0.9",
 	"minAppVersion": "0.9.12",
-	"description": "Remember cursor and scroll position for each note",
-	"author": "Dmitry Savosh",
+	"description": "Save cursor and scroll position for saved notes, based on Remember cursor position plugin of Dmitry Savosh",
+	"author": "Selladore Wang",
 	"authorUrl": "https://github.com/dy-sh/",
 	"isDesktopOnly": false
 }
