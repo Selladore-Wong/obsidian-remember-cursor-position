@@ -11,18 +11,11 @@ import {
 } from "obsidian";
 
 interface PluginSettings {
-  dbFileName: string;
   delayAfterFileOpening: number;
-  saveTimer: number;
 }
 
-const SAFE_DB_FLUSH_INTERVAL = 5000;
-
 const DEFAULT_SETTINGS: PluginSettings = {
-  dbFileName:
-    ".obsidian/plugins/remember-cursor-position/cursor-positions.json",
   delayAfterFileOpening: 100,
-  saveTimer: SAFE_DB_FLUSH_INTERVAL,
 };
 
 interface EphemeralState {
@@ -198,15 +191,7 @@ export default class RememberCursorPosition extends Plugin {
   }
 
   async loadSettings() {
-    let settings: PluginSettings = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      await this.loadData()
-    );
-    if (settings?.saveTimer < SAFE_DB_FLUSH_INTERVAL) {
-      settings.saveTimer = SAFE_DB_FLUSH_INTERVAL;
-    }
-    this.settings = settings;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
 
   async saveSettings() {
@@ -305,7 +290,7 @@ class SettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Remember cursor position - Settings" });
+    containerEl.createEl("h2", { text: "Save cursor position - Settings" });
 
     new Setting(containerEl)
       .setName("Delay after opening a new note")
