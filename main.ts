@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, MarkdownView, TAbstractFile, Editor } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, MarkdownView, TAbstractFile, Editor, Notice } from 'obsidian';
 
 interface PluginSettings {
 	dbFileName: string;
@@ -73,13 +73,27 @@ export default class RememberCursorPosition extends Plugin {
 		);
 
 		//todo: replace by scroll and mouse cursor move events
-		this.registerInterval(
-			window.setInterval(() => this.checkEphemeralStateChanged(), 100)
-		);
+		// this.registerInterval(
+		// 	window.setInterval(() => this.checkEphemeralStateChanged(), 100)
+		// );
 
-		this.registerInterval(
-			window.setInterval(() => this.writeDb(this.db), this.settings.saveTimer)
-		);
+		// this.registerInterval(
+		// 	window.setInterval(() => this.writeDb(this.db), this.settings.saveTimer)
+		// );
+
+		// 添加保存当前位置的命令
+		this.addCommand({
+			id: 'save-current-position',
+			name: '保存当前光标位置',
+			callback: () => this.saveCurrentPosition(),
+		});
+
+		// 添加恢复光标位置的命令
+		this.addCommand({
+			id: 'restore-saved-position',
+			name: '恢复已保存的光标位置',
+			callback: () => this.restoreSavedPosition(),
+		});
 
 		this.restoreEphemeralState();
 	}
@@ -297,6 +311,31 @@ export default class RememberCursorPosition extends Plugin {
 
 	async delay(ms: number) {
 		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	// 新增方法用于保存当前位置
+	saveCurrentPosition() {
+		const fileName = this.app.workspace.getActiveFile()?.path;
+		if (fileName) {
+			const st = this.getEphemeralState();
+			this.db[fileName] = st;
+			this.writeDb(this.db);
+			new Notice('已保存当前光标位置');
+		}
+	}
+
+	// 新增方法用于恢复已保存的位置
+	restoreSavedPosition() {
+		const fileName = this.app.workspace.getActiveFile()?.path;
+		if (fileName) {
+			const savedState = this.db[fileName];
+			if (savedState) {
+				this.setEphemeralState(savedState);
+				new Notice('已恢复保存的光标位置');
+			} else {
+				new Notice('当前文档没有保存的光标位置');
+			}
+		}
 	}
 }
 
