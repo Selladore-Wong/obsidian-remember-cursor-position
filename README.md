@@ -1,9 +1,7 @@
-# Remember cursor position
+# Save cursor position
 
-This plugin for [Obsidian](https://obsidian.md/) remembers the cursor position and scroll for each note. This is very convenient when you switch between notes, go from link to link, go back, you do not need to scroll to the place where you were the last time.
+This plugin is a customized fork of [dy-sh/obsidian-remember-cursor-position](https://github.com/dy-sh/obsidian-remember-cursor-position), tailored to meet my needs.
 
-The cursor position, scrolling and text selection  for all notes are stored in a file (the path can be set in the settings), so everything is restored even if you close Obsidian and open it again.
+This [Obsidian](https://obsidian.md/) plugin enables saving the cursor position and scroll state to a note's frontmatter(metadata) when a designated command is triggered. It also allows restoring the cursor positond and scroll state from the saved frontmatter when file is opened or the corresponding command is activated.
 
-It works in edit and preview mode.
-
-
+The plugin works in edit view (both preview mode & source code mode). In reading view, the scroll saving and restoring feature works well, but cursor position saving and restoring is not supported.
