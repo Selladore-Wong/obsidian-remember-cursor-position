@@ -41,9 +41,6 @@ interface EphemeralState {
 
 export default class RememberCursorPosition extends Plugin {
   settings: PluginSettings;
-  db: { [file_path: string]: EphemeralState };
-  lastSavedDb: { [file_path: string]: EphemeralState };
-  lastEphemeralState: EphemeralState;
   lastLoadedFileName: string;
   loadedLeafIdList: string[] = [];
   loadingFile = false;
@@ -51,47 +48,11 @@ export default class RememberCursorPosition extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    try {
-      this.db = await this.readDb();
-      this.lastSavedDb = await this.readDb();
-    } catch (e) {
-      console.error(
-        "Remember Cursor Position plugin can't read database: " + e
-      );
-      this.db = {};
-      this.lastSavedDb = {};
-    }
-
     this.addSettingTab(new SettingTab(this.app, this));
 
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => this.restoreEphemeralState())
     );
-
-    this.registerEvent(
-      this.app.workspace.on("quit", () => {
-        this.writeDb(this.db);
-      })
-    );
-
-    this.registerEvent(
-      this.app.vault.on("rename", (file, oldPath) =>
-        this.renameFile(file, oldPath)
-      )
-    );
-
-    this.registerEvent(
-      this.app.vault.on("delete", (file) => this.deleteFile(file))
-    );
-
-    //todo: replace by scroll and mouse cursor move events
-    // this.registerInterval(
-    // 	window.setInterval(() => this.checkEphemeralStateChanged(), 100)
-    // );
-
-    // this.registerInterval(
-    // 	window.setInterval(() => this.writeDb(this.db), this.settings.saveTimer)
-    // );
 
     // Command to save current position & selection
     this.addCommand({
@@ -110,41 +71,57 @@ export default class RememberCursorPosition extends Plugin {
     this.restoreEphemeralState();
   }
 
-  renameFile(file: TAbstractFile, oldPath: string) {
-    let newName = file.path;
-    let oldName = oldPath;
-    this.db[newName] = this.db[oldName];
-    delete this.db[oldName];
-  }
-
-  deleteFile(file: TAbstractFile) {
-    let fileName = file.path;
-    delete this.db[fileName];
-  }
-
-  checkEphemeralStateChanged() {
+  async restoreEphemeralState() {
     let fileName = this.app.workspace.getActiveFile()?.path;
 
-    //waiting for load new file
+    if (fileName && this.loadingFile && this.lastLoadedFileName == fileName)
+		//if already started loading
+		return;
+
+    let activeLeaf = this.app.workspace.getMostRecentLeaf();
     if (
-      !fileName ||
-      !this.lastLoadedFileName ||
-      fileName != this.lastLoadedFileName ||
-      this.loadingFile
+      activeLeaf &&
+      this.loadedLeafIdList.includes(
+        activeLeaf.id + ":" + activeLeaf.getViewState().state.file
+      )
     )
       return;
 
-    let st = this.getEphemeralState();
+    this.loadedLeafIdList = [];
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (leaf.getViewState().type === "markdown") {
+        this.loadedLeafIdList.push(
+          leaf.id + ":" + leaf.getViewState().state.file
+        );
+      }
+    });
 
-    if (!this.lastEphemeralState) this.lastEphemeralState = st;
+    this.loadingFile = true;
 
-    if (
-      !isNaN(st.scroll) &&
-      !this.isEphemeralStatesEquals(st, this.lastEphemeralState)
-    ) {
-      this.saveEphemeralState(st);
-      this.lastEphemeralState = st;
+    if (this.lastLoadedFileName != fileName) {
+      this.lastLoadedFileName = fileName;
+
+      if (fileName) {
+        let st = await this.getStateFromFrontmatter(fileName);
+        if (st) {
+			//waiting for load note
+			await this.delay(this.settings.delayAfterFileOpening);
+
+          // Don't scroll when a link scrolls and highlights text
+          // i.e. if file is open by links like [link](note.md#header) and wikilinks
+          // See #10, #32, #46, #51
+			let containsFlashingSpan =
+            this.app.workspace.containerEl.querySelector("span.is-flashing");
+
+          if (!containsFlashingSpan) {
+            await this.delay(10);
+            this.setEphemeralState(st);
+          }
+        }
+      }
     }
+
+    this.loadingFile = false;
   }
 
   isEphemeralStatesEquals(
@@ -171,103 +148,7 @@ export default class RememberCursorPosition extends Plugin {
     return true;
   }
 
-  async saveEphemeralState(st: EphemeralState) {
-    let fileName = this.app.workspace.getActiveFile()?.path;
-    if (fileName && fileName == this.lastLoadedFileName) {
-      //do not save if file changed or was not loaded
-      this.db[fileName] = st;
-    }
-  }
-
-  async restoreEphemeralState() {
-    let fileName = this.app.workspace.getActiveFile()?.path;
-
-    if (fileName && this.loadingFile && this.lastLoadedFileName == fileName)
-      //if already started loading
-      return;
-
-    let activeLeaf = this.app.workspace.getMostRecentLeaf();
-    if (
-      activeLeaf &&
-      this.loadedLeafIdList.includes(
-        activeLeaf.id + ":" + activeLeaf.getViewState().state.file
-      )
-    )
-      return;
-
-    this.loadedLeafIdList = [];
-    this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.getViewState().type === "markdown") {
-        this.loadedLeafIdList.push(
-          leaf.id + ":" + leaf.getViewState().state.file
-        );
-      }
-    });
-
-    this.loadingFile = true;
-
-    if (this.lastLoadedFileName != fileName) {
-      this.lastEphemeralState = {};
-      this.lastLoadedFileName = fileName;
-
-      let st: EphemeralState;
-
-      if (fileName) {
-        st = this.db[fileName];
-        if (st) {
-          //waiting for load note
-          await this.delay(this.settings.delayAfterFileOpening);
-
-          // Don't scroll when a link scrolls and highlights text
-          // i.e. if file is open by links like [link](note.md#header) and wikilinks
-          // See #10, #32, #46, #51
-          let containsFlashingSpan =
-            this.app.workspace.containerEl.querySelector("span.is-flashing");
-
-          if (!containsFlashingSpan) {
-            await this.delay(10);
-            this.setEphemeralState(st);
-          }
-        }
-      }
-      this.lastEphemeralState = st;
-    }
-
-    this.loadingFile = false;
-  }
-
-  async readDb(): Promise<{ [file_path: string]: EphemeralState }> {
-    let db: { [file_path: string]: EphemeralState } = {};
-
-    if (await this.app.vault.adapter.exists(this.settings.dbFileName)) {
-      let data = await this.app.vault.adapter.read(this.settings.dbFileName);
-      db = JSON.parse(data);
-    }
-
-    return db;
-  }
-
-  async writeDb(db: { [file_path: string]: EphemeralState }) {
-    //create folder for db file if not exist
-    let newParentFolder = this.settings.dbFileName.substring(
-      0,
-      this.settings.dbFileName.lastIndexOf("/")
-    );
-    if (!(await this.app.vault.adapter.exists(newParentFolder)))
-      this.app.vault.adapter.mkdir(newParentFolder);
-
-    if (JSON.stringify(this.db) !== JSON.stringify(this.lastSavedDb)) {
-      this.app.vault.adapter.write(
-        this.settings.dbFileName,
-        JSON.stringify(db)
-      );
-      this.lastSavedDb = JSON.parse(JSON.stringify(db));
-    }
-  }
-
   getEphemeralState(): EphemeralState {
-    // let state: EphemeralState = this.app.workspace.getActiveViewOfType(MarkdownView)?.getEphemeralState(); //doesn't work properly
-
     let state: EphemeralState = {};
     state.scroll = Number(
       this.app.workspace
@@ -309,8 +190,6 @@ export default class RememberCursorPosition extends Plugin {
 
     if (view && state.scroll) {
       view.setEphemeralState(state);
-      // view.previewMode.applyScroll(state.scroll);
-      // view.sourceMode.applyScroll(state.scroll);
     }
   }
 
@@ -343,25 +222,22 @@ export default class RememberCursorPosition extends Plugin {
     const fileName = this.app.workspace.getActiveFile()?.path;
     if (fileName) {
       const st = this.getEphemeralState();
-      this.db[fileName] = st;
-      this.writeDb(this.db);
-      new Notice("Position & selection saved");
-
       // Update frontmatter
       this.updateFrontmatter(fileName, st);
+      new Notice("Position & selection saved to frontmatter");
     }
   }
 
   // Method to manually trigger restoring saved position
-  restoreSavedPosition() {
+  async restoreSavedPosition() {
     const fileName = this.app.workspace.getActiveFile()?.path;
     if (fileName) {
-      const savedState = this.db[fileName];
+      const savedState = await this.getStateFromFrontmatter(fileName);
       if (savedState) {
         this.setEphemeralState(savedState);
-        new Notice("Position & selection restored");
+        new Notice("Position & selection restored from frontmatter");
       } else {
-        new Notice("No saved position & selection for current document");
+        new Notice("No saved position & selection in frontmatter");
       }
     }
   }
@@ -432,19 +308,6 @@ class SettingTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "Remember cursor position - Settings" });
 
     new Setting(containerEl)
-      .setName("Data file name")
-      .setDesc("Save positions to this file")
-      .addText((text) =>
-        text
-          .setPlaceholder("Example: cursor-positions.json")
-          .setValue(this.plugin.settings.dbFileName)
-          .onChange(async (value) => {
-            this.plugin.settings.dbFileName = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
       .setName("Delay after opening a new note")
       .setDesc(
         "This plugin shouldn't scroll if you used a link to the note header like [link](note.md#header). If it did, then increase the delay until everything works. If you are not using links to page sections, set the delay to zero (slider to the left). Slider values: 0-300 ms (default value: 100 ms)."
@@ -455,21 +318,6 @@ class SettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.delayAfterFileOpening)
           .onChange(async (value) => {
             this.plugin.settings.delayAfterFileOpening = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Delay between saving the cursor position to file")
-      .setDesc(
-        "Useful for multi-device users. If you don't want to wait until closing Obsidian to the cursor position been saved."
-      )
-      .addSlider((text) =>
-        text
-          .setLimits(SAFE_DB_FLUSH_INTERVAL, SAFE_DB_FLUSH_INTERVAL * 10, 10)
-          .setValue(this.plugin.settings.saveTimer)
-          .onChange(async (value) => {
-            this.plugin.settings.saveTimer = value;
             await this.plugin.saveSettings();
           })
       );
