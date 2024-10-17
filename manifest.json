@@ -5,6 +5,6 @@
 	"minAppVersion": "0.9.12",
 	"description": "Save cursor and scroll position for saved notes, based on Remember cursor position plugin of Dmitry Savosh",
 	"author": "Selladore Wang",
-	"authorUrl": "https://github.com/dy-sh/",
+	"authorUrl": "https://github.com/Selladore-Wong/obsidian-save-cursor-position",
 	"isDesktopOnly": false
 }
