@@ -235,8 +235,18 @@ export default class RememberCursorPosition extends Plugin {
     if (file instanceof TFile) {
       const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
       if (frontmatter && (frontmatter.cursor || frontmatter.scroll)) {
+        const frontmatterLineCount = this.getFrontmatterLineCount(file);
         return {
-          cursor: frontmatter.cursor,
+          cursor: frontmatter.cursor ? {
+            from: {
+              ch: frontmatter.cursor.from.ch,
+              line: frontmatter.cursor.from.line + frontmatterLineCount
+            },
+            to: {
+              ch: frontmatter.cursor.to.ch,
+              line: frontmatter.cursor.to.line + frontmatterLineCount
+            }
+          } : undefined,
           scroll: frontmatter.scroll
         } as EphemeralState;
       }
@@ -250,18 +260,20 @@ export default class RememberCursorPosition extends Plugin {
     if (file instanceof TFile) {
       // Get existing frontmatter
       const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter || {};
+      const frontmatterLineCount = this.getFrontmatterLineCount(file);
 
-      // Update frontmatter
-      frontmatter.cursor = {
-        from: {
-          ch: st.cursor.from.ch,
-          line: st.cursor.from.line
-        },
-        to: {
-          ch: st.cursor.to.ch,
-          line: st.cursor.to.line
-        }
-      };
+      if (st.cursor) {
+        frontmatter.cursor = {
+          from: {
+            ch: Math.max(st.cursor.from.line - frontmatterLineCount, 0) === 0 ? 0 : st.cursor.from.ch,
+            line: Math.max(st.cursor.from.line - frontmatterLineCount, 0)
+          },
+          to: {
+            ch: Math.max(st.cursor.to.line - frontmatterLineCount, 0) === 0 ? 0 : st.cursor.to.ch,
+            line: Math.max(st.cursor.to.line - frontmatterLineCount, 0)
+          }
+        };
+      }
       frontmatter.scroll = st.scroll;
 
       // Use Obsidian API to update frontmatter, and handle error
@@ -274,6 +286,23 @@ export default class RememberCursorPosition extends Plugin {
         new Notice("Failed to update cursor position information in frontmatter");
       }
     }
+  }
+
+  private getFrontmatterLineCount(file: TFile): number {
+    const cache = this.app.metadataCache.getFileCache(file);
+    if (!cache || !cache.frontmatter) {
+      console.log("Frontmatter not found");
+      return 0;
+    }
+
+    const position = cache.frontmatterPosition;
+    if (!position) {
+      console.log("Frontmatter position not found");
+      return 0;
+    }
+
+    // console.log("Frontmatter line cnt: ", position.end.line);
+    return position.end.line;
   }
 }
 
