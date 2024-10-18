@@ -265,12 +265,12 @@ export default class RememberCursorPosition extends Plugin {
       if (st.cursor) {
         frontmatter.cursor = {
           from: {
-            ch: st.cursor.from.ch,
-            line: st.cursor.from.line - frontmatterLineCount
+            ch: Math.max(st.cursor.from.line - frontmatterLineCount, 0) === 0 ? 0 : st.cursor.from.ch,
+            line: Math.max(st.cursor.from.line - frontmatterLineCount, 0)
           },
           to: {
-            ch: st.cursor.to.ch,
-            line: st.cursor.to.line - frontmatterLineCount
+            ch: Math.max(st.cursor.to.line - frontmatterLineCount, 0) === 0 ? 0 : st.cursor.to.ch,
+            line: Math.max(st.cursor.to.line - frontmatterLineCount, 0)
           }
         };
       }
